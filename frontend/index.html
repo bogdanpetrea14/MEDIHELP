@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <title>MediHelp – Demo SSO</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Keycloak JS adapter din CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/keycloak-js@22.0.5/dist/keycloak.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 16px;
+      background: #f3f4f6;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      margin-right: 8px;
+    }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-secondary { background: #e5e7eb; color: #111827; }
+    pre {
+      background: #0f172a;
+      color: #e5e7eb;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      overflow-x: auto;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #e5e7eb;
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>MediHelp – Demo autentificare SSO</h1>
+
+  <div class="card">
+    <h2>1. Autentificare / Înregistrare</h2>
+    <p>
+      Apasă <strong>Login</strong> pentru a fi redirecționat în Keycloak.<br/>
+      Dacă nu ai cont, poți folosi butonul <strong>Register</strong> din interfața Keycloak.
+    </p>
+    <div>
+      <button id="btn-login" class="btn-primary">Login</button>
+      <button id="btn-logout" class="btn-secondary" disabled>Logout</button>
+      <button id="btn-register" class="btn-secondary">Register</button>
+    </div>
+    <p id="auth-status" style="margin-top: 10px; font-size: 14px;">
+      Status: <strong>neautentificat</strong>
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>2. Token & user info din Keycloak</h2>
+    <p style="font-size: 14px;">
+      Mai jos poți vedea informațiile primite din Keycloak (user + roluri).
+    </p>
+    <div id="userinfo"></div>
+    <h3>Access token (trunchiat):</h3>
+    <pre id="token-preview">n/a</pre>
+  </div>
+
+  <div class="card">
+    <h2>3. Profil din aplicație (/api/user/me)</h2>
+    <p style="font-size: 14px;">
+      Apasă pe buton pentru a apela gateway-ul MediHelp, care:
+    </p>
+    <ol style="font-size: 14px;">
+      <li>Validează token-ul în Keycloak</li>
+      <li>Trimite username + roluri la <code>user-profile-service</code></li>
+      <li>Profilele sunt create automat în Postgres dacă nu există</li>
+    </ol>
+    <button id="btn-me" class="btn-primary" disabled>Încarcă profilul meu</button>
+    <h3>Răspuns de la /api/user/me:</h3>
+    <pre id="me-response">n/a</pre>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>

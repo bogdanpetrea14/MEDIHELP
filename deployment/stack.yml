@@ -12,7 +12,6 @@ services:
     networks:
       - backend_net
 
-  # Keycloak pentru SSO (dev mode, cu DB internă)
   keycloak-service:
     image: quay.io/keycloak/keycloak:24.0.0
     environment:
@@ -20,14 +19,16 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: admin
     command: ["start-dev"]
     ports:
-      - "8081:8080"           # http://localhost:8081 pentru consola Keycloak
+      - "8081:8080"
     networks:
       - backend_net
+    volumes:
+      - keycloak_data:/opt/keycloak/data
 
   gateway-service:
     image: medihelp-gateway:latest
     ports:
-      - "8080:5000"           # singurul entrypoint extern al aplicației
+      - "8080:5000"
     environment:
       USER_PROFILE_BASE_URL: http://user-profile-service:5000
       KEYCLOAK_BASE_URL: http://keycloak-service:8080
@@ -59,9 +60,17 @@ services:
     networks:
       - backend_net
 
+  frontend-web:
+    image: medihelp-frontend:latest
+    ports:
+      - "8082:80"
+    networks:
+      - backend_net
+
 networks:
   backend_net:
     driver: overlay
 
 volumes:
   postgres_data:
+  keycloak_data:
