@@ -1,15 +1,49 @@
 version: "3.8"
 
 services:
+  postgres-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: admin123
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: medihelp_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend_net
+
+  # Keycloak pentru SSO (dev mode, cu DB internă)
+  keycloak-service:
+    image: quay.io/keycloak/keycloak:24.0.0
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command: ["start-dev"]
+    ports:
+      - "8081:8080"           # http://localhost:8081 pentru consola Keycloak
+    networks:
+      - backend_net
+
   gateway-service:
     image: medihelp-gateway:latest
     ports:
-      - "8080:5000"        # expunem doar gateway în exterior
+      - "8080:5000"           # singurul entrypoint extern al aplicației
+    environment:
+      USER_PROFILE_BASE_URL: http://user-profile-service:5000
+      KEYCLOAK_BASE_URL: http://keycloak-service:8080
+      KEYCLOAK_REALM: medihelp
+      KEYCLOAK_CLIENT_ID: medihelp-frontend
     networks:
       - backend_net
 
   user-profile-service:
-    image: medihelp-user-profile:latest
+    image: medihelp-user-profile:db1
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: "5432"
+      DB_NAME: medihelp_db
+      DB_USER: admin123
+      DB_PASSWORD: admin123
     networks:
       - backend_net
 
@@ -21,10 +55,13 @@ services:
   inventory-service:
     image: medihelp-inventory:latest
     deploy:
-      replicas: 2          # cerința lor: inventory replicat
+      replicas: 2
     networks:
       - backend_net
 
 networks:
   backend_net:
     driver: overlay
+
+volumes:
+  postgres_data:
