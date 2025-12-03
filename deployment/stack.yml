@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  gateway-service:
+    image: medihelp-gateway:latest
+    ports:
+      - "8080:5000"        # expunem doar gateway în exterior
+    networks:
+      - backend_net
+
+  user-profile-service:
+    image: medihelp-user-profile:latest
+    networks:
+      - backend_net
+
+  prescription-service:
+    image: medihelp-prescription:latest
+    networks:
+      - backend_net
+
+  inventory-service:
+    image: medihelp-inventory:latest
+    deploy:
+      replicas: 2          # cerința lor: inventory replicat
+    networks:
+      - backend_net
+
+networks:
+  backend_net:
+    driver: overlay
