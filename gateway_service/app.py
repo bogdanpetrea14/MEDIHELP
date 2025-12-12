@@ -7,7 +7,6 @@ import time
 
 app = Flask(__name__)
 
-# CORS: permitem apeluri de la frontend (http://localhost:8082) la /api/*
 CORS(
     app,
     resources={r"/api/*": {
@@ -17,13 +16,11 @@ CORS(
     }},
 )
 
-# Microservicii interne
 USER_PROFILE_BASE_URL = os.environ.get(
     "USER_PROFILE_BASE_URL",
     "http://user-profile-service:5000",
 )
 
-# (rămân env-urile de Keycloak, dar nu mai chemăm /userinfo pentru simplitate)
 KEYCLOAK_BASE_URL = os.environ.get(
     "KEYCLOAK_BASE_URL",
     "http://keycloak-service:8080",
@@ -60,7 +57,6 @@ def health_check():
     return jsonify({"status": "healthy", "service": "gateway-service"}), 200
 
 
-# ------- Forward simplu către user-profile-service (lista profiluri) --------
 
 @app.route("/api/profiles", methods=["GET"])
 def api_get_profiles():
@@ -120,7 +116,6 @@ def api_get_profile(user_id: int):
         )
 
 
-# ---------------- SSO + management de roluri: /api/user/me ------------------
 
 @app.route("/api/user/me", methods=["GET", "OPTIONS"])
 def api_user_me():
@@ -134,7 +129,6 @@ def api_user_me():
     """
 
     if request.method == "OPTIONS":
-        # Preflight CORS – flask-cors oricum răspunde, dar păstrăm 200
         return "", 200
 
     auth_header = request.headers.get("Authorization")
@@ -146,7 +140,6 @@ def api_user_me():
 
     token = auth_header.split(" ", 1)[1]
 
-    # Pas 1: decodăm token-ul (fără semnătură)
     payload, err = parse_token_no_verify(token)
     if not payload:
         return jsonify({"error": "invalid or expired token", "reason": err}), 401
@@ -159,7 +152,6 @@ def api_user_me():
     roles = realm_access.get("roles", [])
     roles_str = ",".join(roles)
 
-    # Pas 3: apelăm /me în user-profile-service
     headers = {
         "X-Username": username,
         "X-Roles": roles_str,

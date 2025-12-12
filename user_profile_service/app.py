@@ -11,7 +11,6 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 app = Flask(__name__)
 
-# ----------- CONFIG DB din env vars -----------
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "medihelp_db")
@@ -113,8 +112,6 @@ def get_profile(user_id: int):
         session.close()
 
 
-# ---------------------- /me pentru integrarea cu SSO ------------------------
-
 
 @app.route("/me", methods=["GET"])
 def me():
@@ -143,7 +140,6 @@ def me():
     try:
         user = session.query(UserProfile).filter_by(username=username).first()
         if not user:
-            # creăm profil nou pe baza meta-datelor din SSO
             user = UserProfile(username=username, role=main_role)
             session.add(user)
             session.commit()

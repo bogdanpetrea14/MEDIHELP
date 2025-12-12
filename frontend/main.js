@@ -1,9 +1,5 @@
-// IMPORTANT: URL-urile sunt văzute DIN BROWSER, nu din Docker.
-// Keycloak: http://localhost:8081 (așa l-am mapat în stack.yml)
-// Gateway:  http://localhost:8080
-
 const keycloak = new Keycloak({
-  url: 'http://localhost:8081',      // portul expus al keycloak-service
+  url: 'http://localhost:8081', 
   realm: 'medihelp',
   clientId: 'medihelp-frontend',
 });
@@ -64,7 +60,6 @@ btnRegister.onclick = () => {
 
 btnMe.onclick = async () => {
   try {
-    // reîmprospătăm token-ul dacă e aproape expirat
     await keycloak.updateToken(30);
     const resp = await fetch('http://localhost:8080/api/user/me', {
       headers: {
@@ -78,7 +73,6 @@ btnMe.onclick = async () => {
   }
 };
 
-// Inițializare Keycloak la încărcarea paginii
 keycloak
   .init({ onLoad: 'check-sso', checkLoginIframe: false })
   .then(authenticated => {
