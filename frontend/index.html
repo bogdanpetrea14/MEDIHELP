@@ -2,94 +2,494 @@
 <html lang="ro">
 <head>
   <meta charset="utf-8" />
-  <title>MediHelp – Demo SSO</title>
+  <title>MediHelp – Sistem de Management Medical</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.jsdelivr.net/npm/keycloak-js@22.0.5/dist/keycloak.min.js"></script>
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 800px;
-      margin: 40px auto;
-      padding: 0 16px;
       background: #f3f4f6;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .header {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      color: #2563eb;
+    }
+    .auth-section {
+      display: flex;
+      gap: 10px;
+      align-items: center;
     }
     .card {
       background: #ffffff;
       border-radius: 12px;
       padding: 20px;
-      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       margin-bottom: 20px;
     }
+    .card h2 {
+      margin-bottom: 15px;
+      color: #111827;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      background: #e5e7eb;
+      color: #111827;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      background: #2563eb;
+      color: white;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
     button {
-      padding: 8px 14px;
+      padding: 8px 16px;
       border-radius: 8px;
       border: none;
       cursor: pointer;
       font-weight: 500;
       margin-right: 8px;
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
     .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
     .btn-secondary { background: #e5e7eb; color: #111827; }
-    pre {
-      background: #0f172a;
-      color: #e5e7eb;
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 12px;
-      overflow-x: auto;
+    .btn-secondary:hover:not(:disabled) { background: #d1d5db; }
+    .btn-success { background: #10b981; color: white; }
+    .btn-success:hover:not(:disabled) { background: #059669; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover:not(:disabled) { background: #dc2626; }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #374151;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    table th,
+    table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    table th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+    }
+    table tr:hover {
+      background: #f9fafb;
     }
     .badge {
       display: inline-block;
-      padding: 2px 8px;
+      padding: 4px 12px;
       border-radius: 999px;
-      font-size: 11px;
-      background: #e5e7eb;
-      margin-right: 4px;
+      font-size: 12px;
+      font-weight: 500;
     }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+    .badge-info { background: #dbeafe; color: #1e40af; }
+    .alert {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .alert-info { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    pre {
+      background: #0f172a;
+      color: #e5e7eb;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 12px;
+      overflow-x: auto;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .hidden {
+      display: none;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    .status-online { background: #10b981; }
+    .status-offline { background: #ef4444; }
   </style>
 </head>
 <body>
-  <h1>MediHelp – Demo autentificare SSO</h1>
-
-  <div class="card">
-    <h2>1. Autentificare / Înregistrare</h2>
-    <p>
-      Apasă <strong>Login</strong> pentru a fi redirecționat în Keycloak.<br/>
-      Dacă nu ai cont, poți folosi butonul <strong>Register</strong> din interfața Keycloak.
-    </p>
-    <div>
-      <button id="btn-login" class="btn-primary">Login</button>
-      <button id="btn-logout" class="btn-secondary" disabled>Logout</button>
-      <button id="btn-register" class="btn-secondary">Register</button>
+  <div class="container">
+    <div class="header">
+      <h1>🏥 MediHelp – Sistem de Management Medical</h1>
+      <div class="auth-section">
+        <span id="auth-status">Status: <strong style="color:red">neautentificat</strong></span>
+        <button id="btn-login" class="btn-primary">Login</button>
+        <button id="btn-logout" class="btn-secondary" disabled>Logout</button>
+      </div>
     </div>
-    <p id="auth-status" style="margin-top: 10px; font-size: 14px;">
-      Status: <strong>neautentificat</strong>
-    </p>
-  </div>
 
-  <div class="card">
-    <h2>2. Token & user info din Keycloak</h2>
-    <p style="font-size: 14px;">
-      Mai jos poți vedea informațiile primite din Keycloak (user + roluri).
-    </p>
-    <div id="userinfo"></div>
-    <h3>Access token (trunchiat):</h3>
-    <pre id="token-preview">n/a</pre>
-  </div>
+    <div id="unauthenticated-view" class="card">
+      <h2>Bun venit la MediHelp</h2>
+      <p>Te rugăm să te autentifici pentru a accesa funcționalitățile sistemului.</p>
+      <p><strong>Roluri disponibile:</strong> DOCTOR, PHARMACIST, ADMIN, PATIENT</p>
+    </div>
 
-  <div class="card">
-    <h2>3. Profil din aplicație (/api/user/me)</h2>
-    <p style="font-size: 14px;">
-      Apasă pe buton pentru a apela gateway-ul MediHelp, care:
-    </p>
-    <ol style="font-size: 14px;">
-      <li>Validează token-ul în Keycloak</li>
-      <li>Trimite username + roluri la <code>user-profile-service</code></li>
-      <li>Profilele sunt create automat în Postgres dacă nu există</li>
-    </ol>
-    <button id="btn-me" class="btn-primary" disabled>Încarcă profilul meu</button>
-    <h3>Răspuns de la /api/user/me:</h3>
-    <pre id="me-response">n/a</pre>
+    <div id="authenticated-view" class="hidden">
+      <div class="card">
+        <h2>Profil Utilizator</h2>
+        <div id="userinfo"></div>
+        <button id="btn-me" class="btn-primary">Încarcă profilul meu</button>
+        <pre id="me-response" style="margin-top: 15px;">n/a</pre>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="prescriptions">📋 Prescripții</button>
+        <button class="tab" data-tab="medications">💊 Medicamente</button>
+        <button class="tab" data-tab="pharmacies">🏪 Farmacii</button>
+        <button class="tab" data-tab="inventory">📦 Stocuri</button>
+        <button class="tab" data-tab="pharmacists">👨‍⚕️ Farmaciști</button>
+      </div>
+
+      <!-- Prescriptions Tab -->
+      <div id="tab-prescriptions" class="tab-content active">
+        <div class="card">
+          <h2>Prescripții</h2>
+          <div id="prescription-alerts"></div>
+          <div class="form-group">
+            <button id="btn-create-prescription" class="btn-primary">Creează Prescripție Nouă</button>
+            <button id="btn-refresh-prescriptions" class="btn-secondary">Reîncarcă</button>
+          </div>
+          
+          <div id="create-prescription-form" class="hidden" style="margin-top: 20px;">
+            <h3>Creare Prescripție</h3>
+            <form id="prescription-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>ID Pacient</label>
+                  <input type="number" id="prescription-patient-id" required>
+                </div>
+                <div class="form-group">
+                  <label>Nume Medicament</label>
+                  <input type="text" id="prescription-medication" required>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Doza</label>
+                  <input type="text" id="prescription-dosage" placeholder="ex: 500mg, 2x/zi" required>
+                </div>
+                <div class="form-group">
+                  <label>Cantitate</label>
+                  <input type="number" id="prescription-quantity" min="1" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Instrucțiuni</label>
+                <textarea id="prescription-instructions" placeholder="Instrucțiuni pentru pacient"></textarea>
+              </div>
+              <button type="submit" class="btn-success">Salvează Prescripția</button>
+              <button type="button" class="btn-secondary" onclick="document.getElementById('create-prescription-form').classList.add('hidden')">Anulează</button>
+            </form>
+          </div>
+
+          <table id="prescriptions-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Pacient</th>
+                <th>Medicament</th>
+                <th>Doza</th>
+                <th>Cantitate</th>
+                <th>Status</th>
+                <th>Farmacie</th>
+                <th>Data</th>
+                <th>Acțiuni</th>
+              </tr>
+            </thead>
+            <tbody id="prescriptions-tbody">
+              <tr><td colspan="9">Se încarcă...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Medications Tab -->
+      <div id="tab-medications" class="tab-content">
+        <div class="card">
+          <h2>Medicamente</h2>
+          <div id="medication-alerts"></div>
+          <div class="form-group">
+            <button id="btn-create-medication" class="btn-primary">Adaugă Medicament</button>
+            <button id="btn-refresh-medications" class="btn-secondary">Reîncarcă</button>
+          </div>
+
+          <div id="create-medication-form" class="hidden" style="margin-top: 20px;">
+            <h3>Adaugă Medicament</h3>
+            <form id="medication-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Nume</label>
+                  <input type="text" id="medication-name" required>
+                </div>
+                <div class="form-group">
+                  <label>Preț Unitate</label>
+                  <input type="number" id="medication-price" step="0.01" min="0" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Descriere</label>
+                <textarea id="medication-description"></textarea>
+              </div>
+              <button type="submit" class="btn-success">Salvează</button>
+              <button type="button" class="btn-secondary" onclick="document.getElementById('create-medication-form').classList.add('hidden')">Anulează</button>
+            </form>
+          </div>
+
+          <table id="medications-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nume</th>
+                <th>Descriere</th>
+                <th>Preț</th>
+              </tr>
+            </thead>
+            <tbody id="medications-tbody">
+              <tr><td colspan="4">Se încarcă...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pharmacies Tab -->
+      <div id="tab-pharmacies" class="tab-content">
+        <div class="card">
+          <h2>Farmacii</h2>
+          <div id="pharmacy-alerts"></div>
+          <div class="form-group">
+            <button id="btn-create-pharmacy" class="btn-primary">Adaugă Farmacie</button>
+            <button id="btn-refresh-pharmacies" class="btn-secondary">Reîncarcă</button>
+          </div>
+
+          <div id="create-pharmacy-form" class="hidden" style="margin-top: 20px;">
+            <h3>Adaugă Farmacie</h3>
+            <form id="pharmacy-form">
+              <div class="form-group">
+                <label>Nume</label>
+                <input type="text" id="pharmacy-name" required>
+              </div>
+              <div class="form-group">
+                <label>Adresă</label>
+                <input type="text" id="pharmacy-address" required>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Telefon</label>
+                  <input type="text" id="pharmacy-phone">
+                </div>
+                <div class="form-group">
+                  <label>Email</label>
+                  <input type="email" id="pharmacy-email">
+                </div>
+              </div>
+              <button type="submit" class="btn-success">Salvează</button>
+              <button type="button" class="btn-secondary" onclick="document.getElementById('create-pharmacy-form').classList.add('hidden')">Anulează</button>
+            </form>
+          </div>
+
+          <table id="pharmacies-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nume</th>
+                <th>Adresă</th>
+                <th>Telefon</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Acțiuni</th>
+              </tr>
+            </thead>
+            <tbody id="pharmacies-tbody">
+              <tr><td colspan="7">Se încarcă...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Inventory Tab -->
+      <div id="tab-inventory" class="tab-content">
+        <div class="card">
+          <h2>Gestionare Stocuri</h2>
+          <div id="inventory-alerts"></div>
+          <div class="form-group">
+            <label>Selectează Farmacie</label>
+            <select id="inventory-pharmacy-select">
+              <option value="">Selectează o farmacie...</option>
+            </select>
+            <button id="btn-refresh-inventory" class="btn-secondary" style="margin-top: 10px;">Reîncarcă Stoc</button>
+          </div>
+
+          <div id="add-stock-form" class="hidden" style="margin-top: 20px;">
+            <h3>Adaugă Stoc</h3>
+            <form id="stock-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Medicament</label>
+                  <select id="stock-medication-select" required></select>
+                </div>
+                <div class="form-group">
+                  <label>Cantitate</label>
+                  <input type="number" id="stock-quantity" min="1" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Prag Minim</label>
+                <input type="number" id="stock-threshold" min="0" value="10">
+              </div>
+              <button type="submit" class="btn-success">Adaugă Stoc</button>
+              <button type="button" class="btn-secondary" onclick="document.getElementById('add-stock-form').classList.add('hidden')">Anulează</button>
+            </form>
+          </div>
+
+          <div id="low-stock-alert" class="hidden"></div>
+
+          <table id="inventory-table">
+            <thead>
+              <tr>
+                <th>Medicament</th>
+                <th>Cantitate</th>
+                <th>Prag Minim</th>
+                <th>Status</th>
+                <th>Ultima Actualizare</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-tbody">
+              <tr><td colspan="5">Selectează o farmacie...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pharmacists Tab -->
+      <div id="tab-pharmacists" class="tab-content">
+        <div class="card">
+          <h2>Farmaciști</h2>
+          <div id="pharmacist-alerts"></div>
+          <div class="form-group">
+            <button id="btn-create-pharmacist" class="btn-primary">Adaugă Farmacist</button>
+            <button id="btn-refresh-pharmacists" class="btn-secondary">Reîncarcă</button>
+          </div>
+
+          <div id="create-pharmacist-form" class="hidden" style="margin-top: 20px;">
+            <h3>Adaugă Farmacist</h3>
+            <form id="pharmacist-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>ID Utilizator</label>
+                  <input type="number" id="pharmacist-user-id" required>
+                </div>
+                <div class="form-group">
+                  <label>Farmacie</label>
+                  <select id="pharmacist-pharmacy-select" required></select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Număr Licență</label>
+                <input type="text" id="pharmacist-license" required>
+              </div>
+              <button type="submit" class="btn-success">Salvează</button>
+              <button type="button" class="btn-secondary" onclick="document.getElementById('create-pharmacist-form').classList.add('hidden')">Anulează</button>
+            </form>
+          </div>
+
+          <table id="pharmacists-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>ID Utilizator</th>
+                <th>Farmacie</th>
+                <th>Licență</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="pharmacists-tbody">
+              <tr><td colspan="5">Se încarcă...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="main.js"></script>

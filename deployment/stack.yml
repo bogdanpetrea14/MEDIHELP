@@ -11,6 +11,26 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend_net
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   keycloak-service:
     image: quay.io/keycloak/keycloak:24.0.0
@@ -24,6 +44,13 @@ services:
       - backend_net
     volumes:
       - keycloak_data:/opt/keycloak/data
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+    # Keycloak are propriul health check intern, nu avem nevoie de unul extern
+    # Health check-ul extern cauzează probleme deoarece Keycloak pornește lent
 
   gateway-service:
     image: medihelp-gateway:latest
@@ -31,11 +58,25 @@ services:
       - "8080:5000"
     environment:
       USER_PROFILE_BASE_URL: http://user-profile-service:5000
+      PRESCRIPTION_BASE_URL: http://prescription-service:5000
+      INVENTORY_BASE_URL: http://inventory-service:5000
+      PHARMACY_BASE_URL: http://pharmacy-service:5000
       KEYCLOAK_BASE_URL: http://keycloak-service:8080
       KEYCLOAK_REALM: medihelp
       KEYCLOAK_CLIENT_ID: medihelp-frontend
     networks:
       - backend_net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   user-profile-service:
     image: medihelp-user-profile:db1
@@ -47,18 +88,90 @@ services:
       DB_PASSWORD: admin123
     networks:
       - backend_net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   prescription-service:
     image: medihelp-prescription:latest
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: "5432"
+      DB_NAME: medihelp_db
+      DB_USER: admin123
+      DB_PASSWORD: admin123
     networks:
       - backend_net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   inventory-service:
     image: medihelp-inventory:latest
-    deploy:
-      replicas: 2
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: "5432"
+      DB_NAME: medihelp_db
+      DB_USER: admin123
+      DB_PASSWORD: admin123
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
     networks:
       - backend_net
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  pharmacy-service:
+    image: medihelp-pharmacy:latest
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: "5432"
+      DB_NAME: medihelp_db
+      DB_USER: admin123
+      DB_PASSWORD: admin123
+    networks:
+      - backend_net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   frontend-web:
     image: medihelp-frontend:latest
@@ -66,6 +179,47 @@ services:
       - "8082:80"
     networks:
       - backend_net
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - backend_net
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    # Note: prometheus.yml trebuie copiat manual în container sau folosit ca config
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deployment/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deployment/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - backend_net
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
 
 networks:
   backend_net:
@@ -74,3 +228,6 @@ networks:
 volumes:
   postgres_data:
   keycloak_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:

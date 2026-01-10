@@ -1,5 +1,6 @@
 import os
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from sqlalchemy import (
     create_engine,
     text,
@@ -10,6 +11,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 app = Flask(__name__)
+CORS(app)
 
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
