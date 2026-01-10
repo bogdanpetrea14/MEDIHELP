@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'gateway-service'
+    static_configs:
+      - targets: ['gateway-service:5000']
+    metrics_path: '/metrics'
+
+  - job_name: 'user-profile-service'
+    static_configs:
+      - targets: ['user-profile-service:5000']
+    metrics_path: '/metrics'
+
+  - job_name: 'prescription-service'
+    static_configs:
+      - targets: ['prescription-service:5000']
+    metrics_path: '/metrics'
+
+  - job_name: 'inventory-service'
+    static_configs:
+      - targets: ['inventory-service:5000']
+    metrics_path: '/metrics'
+
+  - job_name: 'pharmacy-service'
+    static_configs:
+      - targets: ['pharmacy-service:5000']
+    metrics_path: '/metrics'
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-db:5432']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+
