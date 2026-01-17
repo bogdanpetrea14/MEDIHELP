@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <title>MediHelp – Panou Doctor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/keycloak-js@22.0.5/dist/keycloak.min.js"></script>
+  <script src="common.js"></script>
+  <script src="app-functions.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f3f4f6;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .header {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      color: #2563eb;
+    }
+    .nav-links {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      margin-right: 20px;
+    }
+    .nav-links a {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .nav-links a:hover {
+      background: #eff6ff;
+    }
+    .auth-section {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      margin-bottom: 15px;
+      color: #111827;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      background: #e5e7eb;
+      color: #111827;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      background: #2563eb;
+      color: white;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-secondary { background: #e5e7eb; color: #111827; }
+    .btn-secondary:hover:not(:disabled) { background: #d1d5db; }
+    .btn-success { background: #10b981; color: white; }
+    .btn-success:hover:not(:disabled) { background: #059669; }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #374151;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    table th,
+    table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    table th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+    }
+    table tr:hover {
+      background: #f9fafb;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+    .badge-info { background: #dbeafe; color: #1e40af; }
+    .alert {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .alert-info { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏥 MediHelp – Panou Doctor</h1>
+      <div style="display: flex; gap: 20px; align-items: center;">
+        <div class="nav-links">
+          <a href="index.html">🏠 Acasă</a>
+          <a href="profile.html" id="profile-link" style="display: none;">👤 Profil</a>
+        </div>
+        <div class="auth-section">
+          <span id="auth-status">Status: <strong style="color:red">neautentificat</strong></span>
+          <button id="btn-login" class="btn-primary">Login</button>
+          <button id="btn-logout" class="btn-secondary" disabled>Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="unauthenticated-view" class="card">
+      <h2>Bun venit la MediHelp</h2>
+      <p>Te rugăm să te autentifici pentru a accesa funcționalitățile sistemului.</p>
+    </div>
+
+    <div id="authenticated-view" class="hidden">
+      <div class="tabs">
+        <button class="tab active" data-tab="prescriptions">📋 Prescripții</button>
+        <button class="tab" data-tab="medications">💊 Medicamente</button>
+      </div>
+
+      <!-- Prescriptions Tab -->
+      <div id="tab-prescriptions" class="tab-content active">
+        <div class="card">
+          <h2>Prescripții</h2>
+          <div id="prescription-alerts"></div>
+          <div class="form-group">
+            <button id="btn-create-prescription" class="btn-primary">Creează Prescripție Nouă</button>
+            <button id="btn-refresh-prescriptions" class="btn-secondary">Reîncarcă</button>
+          </div>
+          
+          <div id="create-prescription-form" class="hidden" style="margin-top: 20px;">
+            <h3>Creare Prescripție</h3>
+            <form id="prescription-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>ID Pacient</label>
+                  <input type="number" id="prescription-patient-id" required>
+                </div>
+                <div class="form-group">
+                  <label>Medicament</label>
+                  <select id="prescription-medication" required>
+                    <option value="">Selectează medicament...</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Doza</label>
+                  <input type="text" id="prescription-dosage" placeholder="ex: 500mg, 2x/zi" required>
+                </div>
+                <div class="form-group">
+                  <label>Cantitate</label>
+                  <input type="number" id="prescription-quantity" min="1" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Instrucțiuni</label>
+                <textarea id="prescription-instructions" placeholder="Instrucțiuni pentru pacient"></textarea>
+              </div>
+              <button type="submit" class="btn-success">Salvează Prescripția</button>
+              <button type="button" class="btn-secondary" onclick="document.getElementById('create-prescription-form').classList.add('hidden')">Anulează</button>
+            </form>
+          </div>
+
+          <table id="prescriptions-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Pacient</th>
+                <th>Medicament</th>
+                <th>Doza</th>
+                <th>Cantitate</th>
+                <th>Status</th>
+                <th>Farmacie</th>
+                <th>Data</th>
+                <th>Acțiuni</th>
+              </tr>
+            </thead>
+            <tbody id="prescriptions-tbody">
+              <tr><td colspan="9">Se încarcă...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Medications Tab -->
+      <div id="tab-medications" class="tab-content">
+        <div class="card">
+          <h2>Medicamente</h2>
+          <div id="medication-alerts"></div>
+          <div class="form-group">
+            <button id="btn-refresh-medications" class="btn-secondary">Reîncarcă</button>
+          </div>
+
+          <table id="medications-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nume</th>
+                <th>Descriere</th>
+                <th>Preț</th>
+              </tr>
+            </thead>
+            <tbody id="medications-tbody">
+              <tr><td colspan="4">Se încarcă...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Prevent double execution
+    if (window.doctorPageInitialized) {
+      console.log('Doctor page: Already initialized, skipping...');
+    } else {
+      window.doctorPageInitialized = true;
+      
+      // Simple test log first - this should appear immediately
+      console.log('=== DOCTOR PAGE SCRIPT STARTED ===');
+      
+      async function initDoctorPage() {
+      console.log('Doctor page: DOM ready, starting initialization...');
+      
+      // Check role access - only DOCTOR and ADMIN can access
+      try {
+        console.log('Doctor page: Starting authentication check...');
+        const profile = await checkRoleAccess(['DOCTOR']);
+        console.log('Doctor page: checkRoleAccess returned:', profile);
+        
+        if (profile) {
+          console.log('Doctor page: Profile found, showing authenticated view');
+          // Hide unauthenticated view and show authenticated view
+          const unauthenticatedView = document.getElementById('unauthenticated-view');
+          const authenticatedView = document.getElementById('authenticated-view');
+          
+          console.log('Doctor page: unauthenticatedView:', unauthenticatedView);
+          console.log('Doctor page: authenticatedView:', authenticatedView);
+          
+          if (unauthenticatedView) {
+            unauthenticatedView.style.display = 'none';
+            console.log('Doctor page: Hidden unauthenticated view');
+          }
+          if (authenticatedView) {
+            authenticatedView.classList.remove('hidden');
+            authenticatedView.style.display = 'block';
+            console.log('Doctor page: Shown authenticated view');
+          }
+          
+          // Initialize tab switching
+          initializeTabSwitching();
+          
+          // Load initial data
+          loadPrescriptions();
+          loadMedications();
+          
+          // Setup form handlers
+          document.getElementById('btn-create-prescription').onclick = async () => {
+            await populateMedicationDropdown();
+            document.getElementById('create-prescription-form').classList.remove('hidden');
+          };
+          
+          document.getElementById('btn-refresh-prescriptions').onclick = loadPrescriptions;
+          
+          document.getElementById('prescription-form').onsubmit = async (e) => {
+          e.preventDefault();
+          try {
+            await apiCall('/prescriptions', {
+              method: 'POST',
+              body: JSON.stringify({
+                doctor_id: currentUserProfile.id,
+                patient_id: parseInt(document.getElementById('prescription-patient-id').value),
+                medication_name: document.getElementById('prescription-medication').value,
+                dosage: document.getElementById('prescription-dosage').value,
+                quantity: parseInt(document.getElementById('prescription-quantity').value),
+                instructions: document.getElementById('prescription-instructions').value,
+              })
+            });
+            
+            showAlert('prescription-alerts', 'Prescripție creată cu succes!', 'success');
+            document.getElementById('prescription-form').reset();
+            document.getElementById('create-prescription-form').classList.add('hidden');
+            loadPrescriptions();
+          } catch (err) {
+            showAlert('prescription-alerts', 'Eroare: ' + err.message, 'error');
+          }
+        };
+        
+          document.getElementById('btn-refresh-medications').onclick = loadMedications;
+        } else {
+          console.log('Doctor page: No profile returned, showing unauthenticated view');
+          // Not authenticated or wrong role - show unauthenticated view
+          const unauthenticatedView = document.getElementById('unauthenticated-view');
+          const authenticatedView = document.getElementById('authenticated-view');
+          if (unauthenticatedView) unauthenticatedView.style.display = 'block';
+          if (authenticatedView) {
+            authenticatedView.classList.add('hidden');
+            authenticatedView.style.display = 'none';
+          }
+        }
+      } catch (err) {
+        console.error('Error in doctor page initialization:', err);
+        console.error('Error stack:', err.stack);
+        // Show unauthenticated view on error
+        const unauthenticatedView = document.getElementById('unauthenticated-view');
+        const authenticatedView = document.getElementById('authenticated-view');
+        if (unauthenticatedView) {
+          unauthenticatedView.style.display = 'block';
+          // Show error message
+          unauthenticatedView.innerHTML = `
+            <h2>Bun venit la MediHelp</h2>
+            <p style="color: #991b1b;">Eroare: ${err.message}</p>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 10px;">Verifică consola pentru detalii.</p>
+            <button onclick="window.location.reload()" style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px;">
+              Reîncarcă Pagina
+            </button>
+          `;
+        }
+        if (authenticatedView) {
+          authenticatedView.classList.add('hidden');
+          authenticatedView.style.display = 'none';
+        }
+      }
+    }
+    
+    // Wait a bit for scripts to load
+    setTimeout(() => {
+      try {
+        console.log('Doctor page: Script loaded');
+        console.log('Doctor page: keycloak available?', typeof keycloak !== 'undefined');
+        console.log('Doctor page: checkRoleAccess available?', typeof checkRoleAccess !== 'undefined');
+        console.log('Doctor page: window.Keycloak available?', typeof window.Keycloak !== 'undefined');
+        
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+          console.log('Doctor page: DOM still loading, waiting...');
+          document.addEventListener('DOMContentLoaded', initDoctorPage);
+        } else {
+          console.log('Doctor page: DOM already ready');
+          initDoctorPage();
+        }
+        } catch (e) {
+          console.error('Doctor page: Error in setTimeout:', e);
+        }
+      }, 100);
+    }
+  </script>
+</body>
+</html>

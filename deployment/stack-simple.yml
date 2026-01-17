@@ -44,13 +44,6 @@ services:
       - backend_net
     volumes:
       - keycloak_data:/opt/keycloak/data
-    deploy:
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 5
-    # Keycloak are propriul health check intern, nu avem nevoie de unul extern
-    # Health check-ul extern cauzează probleme deoarece Keycloak pornește lent
 
   gateway-service:
     image: medihelp-gateway:latest
@@ -64,17 +57,12 @@ services:
       KEYCLOAK_BASE_URL: http://keycloak-service:8080
       KEYCLOAK_REALM: medihelp
       KEYCLOAK_CLIENT_ID: medihelp-frontend
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_DB: "0"
     networks:
       - backend_net
     deploy:
       replicas: 2
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
       interval: 10s
@@ -95,8 +83,6 @@ services:
       replicas: 2
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
       interval: 10s
@@ -112,18 +98,12 @@ services:
       DB_NAME: medihelp_db
       DB_USER: admin123
       DB_PASSWORD: admin123
-      INVENTORY_BASE_URL: http://inventory-service:5000
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_DB: "0"
     networks:
       - backend_net
     deploy:
       replicas: 2
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
       interval: 10s
@@ -148,8 +128,6 @@ services:
       replicas: 3
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
       interval: 10s
@@ -165,17 +143,12 @@ services:
       DB_NAME: medihelp_db
       DB_USER: admin123
       DB_PASSWORD: admin123
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_DB: "0"
     networks:
       - backend_net
     deploy:
       replicas: 2
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 3
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
       interval: 10s
@@ -194,81 +167,6 @@ services:
       restart_policy:
         condition: on-failure
 
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - prometheus_data:/prometheus
-    configs:
-      - source: prometheus_config_v2
-        target: /etc/prometheus/prometheus.yml
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    networks:
-      - backend_net
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-
-  postgres-exporter:
-    image: quay.io/prometheuscommunity/postgres-exporter:latest
-    environment:
-      DATA_SOURCE_NAME: "postgresql://admin123:admin123@postgres-db:5432/medihelp_db?sslmode=disable"
-    networks:
-      - backend_net
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-    healthcheck:
-      test: ["CMD-SHELL", "wget -O- http://localhost:9187/metrics || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  redis-exporter:
-    image: oliver006/redis_exporter:latest
-    environment:
-      REDIS_ADDR: "redis:6379"
-    networks:
-      - backend_net
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: any
-        delay: 5s
-        max_attempts: 5
-        window: 120s
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./deployment/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./deployment/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    networks:
-      - backend_net
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-
-configs:
-  prometheus_config_v2:
-    external: true
-
 networks:
   backend_net:
     driver: overlay
@@ -277,5 +175,4 @@ volumes:
   postgres_data:
   keycloak_data:
   redis_data:
-  prometheus_data:
-  grafana_data:
+

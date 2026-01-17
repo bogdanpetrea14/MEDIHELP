@@ -1,0 +1,254 @@
+{
+  "dashboard": {
+    "title": "MediHelp System Overview",
+    "tags": ["medihelp", "microservices"],
+    "timezone": "browser",
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Health Status",
+        "type": "stat",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "up{job=~\"gateway-service|user-profile-service|prescription-service|inventory-service|pharmacy-service\"}",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {
+                    "text": "DOWN",
+                    "color": "red"
+                  },
+                  "1": {
+                    "text": "UP",
+                    "color": "green"
+                  }
+                },
+                "type": "value"
+              }
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": 0,
+                  "color": "red"
+                },
+                {
+                  "value": 1,
+                  "color": "green"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "HTTP Request Rate (requests/sec)",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 4,
+          "w": 12,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{job}} - {{method}} {{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "reqps",
+            "label": "Requests/sec"
+          },
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Response Time (95th percentile)",
+        "type": "graph",
+        "gridPos": {
+          "x": 12,
+          "y": 4,
+          "w": 12,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{job}} - {{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "Response Time"
+          },
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "HTTP Status Codes",
+        "type": "graph",
+        "gridPos": {
+          "x": 0,
+          "y": 10,
+          "w": 12,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{job}} - {{status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "reqps"
+          },
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Rate Limit Hits",
+        "type": "graph",
+        "gridPos": {
+          "x": 12,
+          "y": 10,
+          "w": 12,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "rate(rate_limit_hits_total[5m])",
+            "legendFormat": "{{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "reqps",
+            "label": "Rate Limit Hits/sec"
+          },
+          {
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Total Requests by Service",
+        "type": "piechart",
+        "gridPos": {
+          "x": 0,
+          "y": 16,
+          "w": 8,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "sum by (job) (http_requests_total)",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Error Rate",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 16,
+          "w": 8,
+          "h": 3
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+            "legendFormat": "Error Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": 0,
+                  "color": "green"
+                },
+                {
+                  "value": 1,
+                  "color": "yellow"
+                },
+                {
+                  "value": 5,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Average Response Time",
+        "type": "stat",
+        "gridPos": {
+          "x": 16,
+          "y": 16,
+          "w": 8,
+          "h": 3
+        },
+        "targets": [
+          {
+            "expr": "avg(rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m]))",
+            "legendFormat": "Avg Response Time",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      }
+    ],
+    "schemaVersion": 27,
+    "version": 1
+  }
+}

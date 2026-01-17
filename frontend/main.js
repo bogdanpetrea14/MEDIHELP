@@ -30,33 +30,59 @@ document.getElementById('btn-logout').onclick = () => {
   keycloak.logout({ redirectUri: window.location.origin });
 };
 
-// Tab switching
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.onclick = () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
-    
+// Tab switching - initialize after DOM is ready
+function initializeTabSwitching() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.onclick = () => {
+      // Don't switch if tab is hidden
+      if (tab.style.display === 'none') {
+        return;
+      }
+      
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      const tabName = tab.dataset.tab;
+      const tabContent = document.getElementById(`tab-${tabName}`);
+      if (tabContent) {
+        tabContent.classList.add('active');
+      }
+      
     // Load data when switching tabs
-    if (tab.dataset.tab === 'prescriptions') loadPrescriptions();
-    else if (tab.dataset.tab === 'medications') loadMedications();
-    else if (tab.dataset.tab === 'pharmacies') loadPharmacies();
-    else if (tab.dataset.tab === 'inventory') {
-      loadPharmaciesForSelect();
-      if (document.getElementById('inventory-pharmacy-select').value) {
-        loadInventory();
+    if (tabName === 'prescriptions') {
+      loadPrescriptions();
+    } else if (tabName === 'medications') {
+      loadMedications();
+    } else if (tabName === 'pharmacies') {
+      if (currentUserProfile && (currentUserProfile.role === 'ADMIN' || currentUserProfile.role === 'PHARMACIST')) {
+        loadPharmacies();
+      }
+    } else if (tabName === 'inventory') {
+      if (currentUserProfile && (currentUserProfile.role === 'PHARMACIST' || currentUserProfile.role === 'ADMIN')) {
+        loadPharmaciesForSelect();
+        loadMedications(); // Load medications for the select dropdown
+        if (document.getElementById('inventory-pharmacy-select').value) {
+          loadInventory();
+        }
+      }
+    } else if (tabName === 'pharmacists') {
+      if (currentUserProfile && currentUserProfile.role === 'ADMIN') {
+        loadPharmacists();
+        loadPharmaciesForSelect();
       }
     }
-    else if (tab.dataset.tab === 'pharmacists') {
-      loadPharmacists();
-      loadPharmaciesForSelect();
-    }
-  };
-});
+    };
+  });
+}
 
-// User profile
-document.getElementById('btn-me').onclick = loadUserProfile;
+// Initialize tab switching when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeTabSwitching);
+} else {
+  initializeTabSwitching();
+}
+
+// Profile refresh button removed - handled in profile.html
 
 async function loadUserProfile() {
   try {
@@ -64,19 +90,182 @@ async function loadUserProfile() {
     const resp = await fetch(`${API_BASE}/user/me`, {
       headers: { Authorization: 'Bearer ' + keycloak.token },
     });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    }
     const data = await resp.json();
     currentUserProfile = data;
-    document.getElementById('me-response').textContent = JSON.stringify(data, null, 2);
     
-    const roles = (keycloak.tokenParsed?.realm_access?.roles) || [];
-    document.getElementById('userinfo').innerHTML = `
-      <p><strong>ID:</strong> ${data.id}</p>
-      <p><strong>Username:</strong> ${data.username}</p>
-      <p><strong>Rol:</strong> ${data.role}</p>
-      <p><strong>Roluri Keycloak:</strong> ${roles.map(r => `<span class="badge badge-info">${r}</span>`).join(' ')}</p>
-    `;
+    // Update tabs based on role - this must happen after profile is loaded
+    updateTabsForRole(data.role);
+    
+    return data;
   } catch (err) {
-    showAlert('me-response', 'Eroare: ' + err, 'error');
+    console.error('Error loading user profile:', err);
+    throw err;
+  }
+}
+
+// Profile display functions removed - now handled in profile.html/profile.js
+
+function updateTabsForRole(role) {
+  console.log('Updating tabs for role:', role);
+  
+  if (!role) {
+    console.error('No role provided to updateTabsForRole');
+    return;
+  }
+  
+  // Ensure profile link is visible
+  const profileLink = document.getElementById('profile-link');
+  if (profileLink) {
+    profileLink.classList.remove('hidden');
+  }
+  
+  // Show tabs container - make sure it's visible
+  const tabsContainer = document.getElementById('main-tabs');
+  if (tabsContainer) {
+    tabsContainer.style.display = 'flex';
+    tabsContainer.classList.remove('hidden');
+  }
+  
+  // FIRST: Hide ALL tabs and their contents by default
+  const allTabs = document.querySelectorAll('.tab[data-role]');
+  allTabs.forEach(tab => {
+    tab.style.display = 'none';
+    tab.classList.remove('active');
+  });
+  
+  // Hide all tab contents
+  document.querySelectorAll('.tab-content').forEach(content => {
+    content.classList.remove('active');
+    content.style.display = 'none';
+  });
+  
+  // SECOND: Show only tabs allowed for this role
+  let visibleTabsCount = 0;
+  allTabs.forEach(tab => {
+    const allowedRoles = tab.dataset.role.split(',').map(r => r.trim());
+    if (allowedRoles.includes(role) || role === 'ADMIN') {
+      tab.style.display = 'inline-block';
+      visibleTabsCount++;
+      console.log('✓ Showing tab:', tab.dataset.tab, 'for role:', role);
+    } else {
+      tab.style.display = 'none';
+      console.log('✗ Hiding tab:', tab.dataset.tab, 'for role:', role, '(allowed:', allowedRoles, ')');
+    }
+  });
+  
+  console.log(`Total visible tabs for ${role}: ${visibleTabsCount}`);
+  
+  // Hide/show action buttons based on role
+  updateActionButtons(role);
+  
+  // THIRD: Activate first visible tab and its content
+  const visibleTabs = Array.from(allTabs).filter(tab => tab.style.display === 'inline-block');
+  
+  if (visibleTabs.length > 0) {
+    // Remove active from all tabs
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(c => {
+      c.classList.remove('active');
+      c.style.display = 'none';
+    });
+    
+    // Activate first visible tab
+    const firstTab = visibleTabs[0];
+    firstTab.classList.add('active');
+    
+    const tabName = firstTab.dataset.tab;
+    const firstTabContent = document.getElementById(`tab-${tabName}`);
+    if (firstTabContent) {
+      firstTabContent.style.display = 'block';
+      firstTabContent.classList.add('active');
+      
+      // Load data for first tab
+      console.log('Loading data for first tab:', tabName);
+      setTimeout(() => {
+        if (tabName === 'prescriptions') {
+          loadPrescriptions();
+        } else if (tabName === 'medications') {
+          loadMedications();
+        } else if (tabName === 'pharmacies') {
+          loadPharmacies();
+        } else if (tabName === 'inventory') {
+          loadPharmaciesForSelect();
+          if (document.getElementById('inventory-pharmacy-select').value) {
+            loadInventory();
+          }
+        } else if (tabName === 'pharmacists') {
+          loadPharmacists();
+          loadPharmaciesForSelect();
+        }
+      }, 100);
+    } else {
+      console.error('Tab content not found for:', tabName);
+    }
+  } else {
+    console.warn('No visible tabs found for role:', role);
+    // Show a message if no tabs are available
+    const tabsContainer = document.getElementById('main-tabs');
+    if (tabsContainer) {
+      tabsContainer.innerHTML = '<div class="alert alert-info">Nu aveți acces la nicio secțiune pentru acest rol.</div>';
+    }
+  }
+}
+
+function updateActionButtons(role) {
+  // Prescriptions tab buttons
+  const btnCreatePrescription = document.getElementById('btn-create-prescription');
+  if (btnCreatePrescription) {
+    btnCreatePrescription.style.display = (role === 'DOCTOR' || role === 'ADMIN') ? 'inline-block' : 'none';
+  }
+  
+  // Medications tab buttons
+  const btnCreateMedication = document.getElementById('btn-create-medication');
+  if (btnCreateMedication) {
+    btnCreateMedication.style.display = (role === 'ADMIN') ? 'inline-block' : 'none';
+  }
+  
+  // Pharmacies tab buttons
+  const btnCreatePharmacy = document.getElementById('btn-create-pharmacy');
+  if (btnCreatePharmacy) {
+    btnCreatePharmacy.style.display = (role === 'ADMIN') ? 'inline-block' : 'none';
+  }
+  
+  // Pharmacists tab buttons
+  const btnCreatePharmacist = document.getElementById('btn-create-pharmacist');
+  if (btnCreatePharmacist) {
+    btnCreatePharmacist.style.display = (role === 'ADMIN') ? 'inline-block' : 'none';
+  }
+  
+  // Inventory buttons
+  const addStockForm = document.getElementById('add-stock-form');
+  if (addStockForm && role !== 'PHARMACIST' && role !== 'ADMIN') {
+    addStockForm.style.display = 'none';
+  }
+}
+
+function loadInitialDataForRole(role) {
+  // Always load medications (read-only for most roles)
+  loadMedications();
+  
+  if (role === 'DOCTOR' || role === 'ADMIN') {
+    loadPrescriptions();
+  } else if (role === 'PHARMACIST' || role === 'ADMIN') {
+    loadPrescriptions(); // Farmaciștii văd prescripțiile pentru a le onora
+    loadPharmacies();
+    loadPharmaciesForSelect();
+  } else if (role === 'PATIENT') {
+    // Pacienții văd doar propriile prescripții - ar trebui filtrate după patient_id
+    loadPrescriptions();
+  }
+  
+  if (role === 'ADMIN') {
+    loadPharmacies();
+    loadPharmacists();
   }
 }
 
@@ -87,16 +276,40 @@ function updateUIAuthenticated() {
   document.getElementById('unauthenticated-view').classList.add('hidden');
   document.getElementById('authenticated-view').classList.remove('hidden');
   
+  // Show profile link immediately when authenticated
+  const profileLink = document.getElementById('profile-link');
+  if (profileLink) {
+    profileLink.classList.remove('hidden');
+  }
+  
+  // Show tabs container
+  const tabsContainer = document.getElementById('main-tabs');
+  if (tabsContainer) {
+    tabsContainer.style.display = 'flex';
+  }
+  
   const roles = (keycloak.tokenParsed?.realm_access?.roles) || [];
   currentUser = {
     username: keycloak.tokenParsed?.preferred_username || keycloak.tokenParsed?.sub,
     roles: roles
   };
   
-  // Load initial data
-  loadPrescriptions();
-  loadMedications();
-  loadPharmacies();
+  // Initialize tab switching
+  initializeTabSwitching();
+  
+  // Load user profile first, which will trigger role-based UI updates
+  loadUserProfile().catch(err => {
+    console.error('Failed to load user profile:', err);
+    // Even if profile fails, try to show tabs based on Keycloak roles
+    if (roles.length > 0) {
+      // Try to infer role from Keycloak roles
+      let inferredRole = 'PATIENT'; // default
+      if (roles.includes('DOCTOR')) inferredRole = 'DOCTOR';
+      else if (roles.includes('PHARMACIST')) inferredRole = 'PHARMACIST';
+      else if (roles.includes('ADMIN')) inferredRole = 'ADMIN';
+      updateTabsForRole(inferredRole);
+    }
+  });
 }
 
 function updateUINotAuthenticated() {
@@ -133,7 +346,12 @@ function showAlert(containerId, message, type = 'info') {
 
 // Prescriptions
 document.getElementById('btn-create-prescription').onclick = () => {
-  if (!currentUser?.roles.includes('DOCTOR')) {
+  if (!currentUserProfile) {
+    alert('Te rugăm să aștepți încărcarea profilului...');
+    return;
+  }
+  const role = currentUserProfile.role;
+  if (role !== 'DOCTOR' && role !== 'ADMIN') {
     alert('Doar doctorii pot crea prescripții!');
     return;
   }
@@ -170,9 +388,24 @@ document.getElementById('prescription-form').onsubmit = async (e) => {
 
 async function loadPrescriptions() {
   try {
-    const filter = currentUser?.roles.includes('DOCTOR') 
-      ? `?doctor_id=${currentUserProfile?.id || ''}` 
-      : '';
+    if (!currentUserProfile) {
+      await loadUserProfile();
+    }
+    
+    let filter = '';
+    const role = currentUserProfile?.role;
+    
+    // Filter based on role
+    if (role === 'DOCTOR') {
+      filter = `?doctor_id=${currentUserProfile.id}`;
+    } else if (role === 'PATIENT') {
+      filter = `?patient_id=${currentUserProfile.id}`;
+    } else if (role === 'PHARMACIST') {
+      // Farmaciștii văd prescripțiile PENDING pentru a le onora
+      filter = '?status=PENDING';
+    }
+    // ADMIN văd toate prescripțiile (fără filtru)
+    
     const prescriptions = await apiCall(`/prescriptions${filter}`);
     
     const tbody = document.getElementById('prescriptions-tbody');
@@ -181,23 +414,34 @@ async function loadPrescriptions() {
       return;
     }
     
-    tbody.innerHTML = prescriptions.map(p => `
-      <tr>
-        <td>${p.id}</td>
-        <td>${p.patient_id}</td>
-        <td>${p.medication_name}</td>
-        <td>${p.dosage}</td>
-        <td>${p.quantity}</td>
-        <td><span class="badge badge-${getStatusBadgeClass(p.status)}">${p.status}</span></td>
-        <td>${p.pharmacy_id || '-'}</td>
-        <td>${new Date(p.created_at).toLocaleDateString('ro-RO')}</td>
-        <td>
-          ${p.status === 'PENDING' && currentUser?.roles.includes('PHARMACIST') 
-            ? `<button class="btn-success" onclick="fulfillPrescription(${p.id})">Onorează</button>` 
-            : ''}
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = prescriptions.map(p => {
+      const canFulfill = p.status === 'PENDING' && (role === 'PHARMACIST' || role === 'ADMIN');
+      const canCancel = p.status === 'PENDING' && role === 'ADMIN';
+      const buttons = [];
+      
+      if (canFulfill) {
+        buttons.push(`<button class="btn-success" onclick="fulfillPrescription(${p.id})">Onorează</button>`);
+      }
+      if (canCancel) {
+        buttons.push(`<button class="btn-danger" onclick="cancelPrescription(${p.id})">Anulează</button>`);
+      }
+      
+      return `
+        <tr>
+          <td>${p.id}</td>
+          <td>${p.patient_id}</td>
+          <td>${p.medication_name}</td>
+          <td>${p.dosage}</td>
+          <td>${p.quantity}</td>
+          <td><span class="badge badge-${getStatusBadgeClass(p.status)}">${p.status}</span></td>
+          <td>${p.pharmacy_id || '-'}</td>
+          <td>${new Date(p.created_at).toLocaleDateString('ro-RO')}</td>
+          <td>
+            ${buttons.length > 0 ? buttons.join(' ') : '-'}
+          </td>
+        </tr>
+      `;
+    }).join('');
   } catch (err) {
     document.getElementById('prescriptions-tbody').innerHTML = 
       `<tr><td colspan="9">Eroare: ${err.message}</td></tr>`;
@@ -205,23 +449,78 @@ async function loadPrescriptions() {
 }
 
 async function fulfillPrescription(id) {
+  if (!currentUserProfile) {
+    await loadUserProfile();
+  }
+  
+  const role = currentUserProfile?.role;
+  if (role !== 'PHARMACIST' && role !== 'ADMIN') {
+    alert('Doar farmaciștii pot onora prescripții!');
+    return;
+  }
+  
   if (!confirm('Ești sigur că vrei să onorezi această prescripție?')) return;
   
   try {
-    const pharmacyId = prompt('Introdu ID-ul farmaciei:');
-    if (!pharmacyId) return;
+    // Try to get pharmacy_id from pharmacist record
+    let pharmacyId = null;
+    if (role === 'PHARMACIST') {
+      try {
+        const pharmacists = await apiCall(`/pharmacists?user_id=${currentUserProfile.id}`);
+        if (pharmacists && pharmacists.length > 0) {
+          pharmacyId = pharmacists[0].pharmacy_id;
+        }
+      } catch (e) {
+        console.log('Could not get pharmacy from pharmacist record');
+      }
+    }
     
-    if (!currentUserProfile) await loadUserProfile();
+    if (!pharmacyId) {
+      const input = prompt('Introdu ID-ul farmaciei:');
+      if (!input) return;
+      pharmacyId = parseInt(input);
+    }
     
     await apiCall(`/prescriptions/${id}/fulfill`, {
       method: 'POST',
       body: JSON.stringify({
-        pharmacy_id: parseInt(pharmacyId),
+        pharmacy_id: pharmacyId,
         pharmacist_id: currentUserProfile.id,
       })
     });
     
     showAlert('prescription-alerts', 'Prescripție onorată cu succes!', 'success');
+    loadPrescriptions();
+    
+    // Refresh inventory if on that tab
+    const inventorySelect = document.getElementById('inventory-pharmacy-select');
+    if (inventorySelect && inventorySelect.value == pharmacyId) {
+      loadInventory();
+    }
+  } catch (err) {
+    showAlert('prescription-alerts', 'Eroare: ' + err.message, 'error');
+  }
+}
+
+async function cancelPrescription(id) {
+  if (!currentUserProfile) {
+    await loadUserProfile();
+  }
+  
+  const role = currentUserProfile?.role;
+  if (role !== 'ADMIN') {
+    alert('Doar administratorii pot anula prescripții!');
+    return;
+  }
+  
+  if (!confirm('Ești sigur că vrei să anulezi această prescripție?')) return;
+  
+  try {
+    await apiCall(`/prescriptions/${id}/cancel`, {
+      method: 'POST'
+    });
+    
+    showAlert('prescription-alerts', 'Prescripție anulată cu succes!', 'success');
     loadPrescriptions();
   } catch (err) {
     showAlert('prescription-alerts', 'Eroare: ' + err.message, 'error');
@@ -240,7 +539,7 @@ function getStatusBadgeClass(status) {
 
 // Medications
 document.getElementById('btn-create-medication').onclick = () => {
-  if (!currentUser?.roles.includes('ADMIN')) {
+  if (!currentUserProfile || currentUserProfile.role !== 'ADMIN') {
     alert('Doar administratorii pot adăuga medicamente!');
     return;
   }
@@ -301,7 +600,7 @@ async function loadMedications() {
 
 // Pharmacies
 document.getElementById('btn-create-pharmacy').onclick = () => {
-  if (!currentUser?.roles.includes('ADMIN')) {
+  if (!currentUserProfile || currentUserProfile.role !== 'ADMIN') {
     alert('Doar administratorii pot adăuga farmacii!');
     return;
   }
@@ -387,11 +686,20 @@ function viewPharmacyStock(pharmacyId) {
 }
 
 // Inventory
-document.getElementById('inventory-pharmacy-select').onchange = () => {
+document.getElementById('inventory-pharmacy-select').onchange = async () => {
   const pharmacyId = document.getElementById('inventory-pharmacy-select').value;
   if (pharmacyId) {
     loadInventory();
-    document.getElementById('add-stock-form').classList.remove('hidden');
+    
+    // Show add stock form only for PHARMACIST and ADMIN
+    if (currentUserProfile) {
+      const role = currentUserProfile.role;
+      if (role === 'PHARMACIST' || role === 'ADMIN') {
+        document.getElementById('add-stock-form').classList.remove('hidden');
+      } else {
+        document.getElementById('add-stock-form').classList.add('hidden');
+      }
+    }
   } else {
     document.getElementById('inventory-tbody').innerHTML = 
       '<tr><td colspan="5">Selectează o farmacie...</td></tr>';
@@ -404,10 +712,34 @@ document.getElementById('btn-refresh-inventory').onclick = loadInventory;
 document.getElementById('stock-form').onsubmit = async (e) => {
   e.preventDefault();
   try {
+    if (!currentUserProfile) {
+      await loadUserProfile();
+    }
+    
+    const role = currentUserProfile?.role;
+    if (role !== 'PHARMACIST' && role !== 'ADMIN') {
+      alert('Doar farmaciștii pot gestiona stocuri!');
+      return;
+    }
+    
     const pharmacyId = document.getElementById('inventory-pharmacy-select').value;
     if (!pharmacyId) {
       alert('Selectează o farmacie!');
       return;
+    }
+    
+    // If pharmacist, verify they belong to this pharmacy
+    if (role === 'PHARMACIST') {
+      try {
+        const pharmacists = await apiCall(`/pharmacists?user_id=${currentUserProfile.id}`);
+        const belongsToPharmacy = pharmacists.some(p => p.pharmacy_id == pharmacyId);
+        if (!belongsToPharmacy) {
+          alert('Nu aparții acestei farmacii! Poți gestiona doar stocul farmaciei tale.');
+          return;
+        }
+      } catch (e) {
+        console.error('Error checking pharmacist pharmacy:', e);
+      }
     }
     
     await apiCall(`/pharmacies/${pharmacyId}/stock`, {
@@ -429,7 +761,11 @@ document.getElementById('stock-form').onsubmit = async (e) => {
 
 async function loadInventory() {
   const pharmacyId = document.getElementById('inventory-pharmacy-select').value;
-  if (!pharmacyId) return;
+  if (!pharmacyId) {
+    document.getElementById('inventory-tbody').innerHTML = 
+      '<tr><td colspan="5">Selectează o farmacie...</td></tr>';
+    return;
+  }
   
   try {
     const stock = await apiCall(`/pharmacies/${pharmacyId}/stock`);
@@ -472,7 +808,7 @@ async function loadInventory() {
 
 // Pharmacists
 document.getElementById('btn-create-pharmacist').onclick = () => {
-  if (!currentUser?.roles.includes('ADMIN')) {
+  if (!currentUserProfile || currentUserProfile.role !== 'ADMIN') {
     alert('Doar administratorii pot adăuga farmaciști!');
     return;
   }

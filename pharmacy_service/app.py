@@ -13,9 +13,26 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
+import redis
+import json
+import time
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 app = Flask(__name__)
 CORS(app)
+
+# Prometheus metrics
+http_requests_total = Counter(
+    'http_requests_total',
+    'Total HTTP requests',
+    ['method', 'endpoint', 'status']
+)
+
+http_request_duration_seconds = Histogram(
+    'http_request_duration_seconds',
+    'HTTP request duration in seconds',
+    ['method', 'endpoint']
+)
 
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
@@ -27,9 +44,34 @@ DATABASE_URL = (
     f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
-engine = create_engine(DATABASE_URL, echo=False, future=True)
+engine = create_engine(
+    DATABASE_URL, 
+    echo=False, 
+    future=True,
+    pool_pre_ping=True,
+    pool_recycle=3600
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Redis configuration
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+REDIS_DB = int(os.environ.get("REDIS_DB", "0"))
+
+try:
+    redis_client = redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        db=REDIS_DB,
+        decode_responses=True,
+        socket_connect_timeout=2
+    )
+    redis_client.ping()
+    redis_available = True
+except:
+    redis_available = False
+    app.logger.warning("Redis not available, caching disabled")
 
 
 class Pharmacy(Base):
@@ -53,6 +95,44 @@ class Pharmacist(Base):
     license_number = Column(String(100), unique=True, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+def get_cache_key(prefix: str, *args) -> str:
+    """Generează o cheie de cache."""
+    return f"{prefix}:{':'.join(str(a) for a in args)}"
+
+
+def get_from_cache(key: str):
+    """Obține date din cache."""
+    if not redis_available:
+        return None
+    try:
+        data = redis_client.get(key)
+        return json.loads(data) if data else None
+    except:
+        return None
+
+
+def set_cache(key: str, value, ttl: int = 300):
+    """Salvează date în cache."""
+    if not redis_available:
+        return
+    try:
+        redis_client.setex(key, ttl, json.dumps(value))
+    except:
+        pass
+
+
+def invalidate_cache(pattern: str):
+    """Șterge chei din cache care se potrivesc cu pattern-ul."""
+    if not redis_available:
+        return
+    try:
+        keys = redis_client.keys(pattern)
+        if keys:
+            redis_client.delete(*keys)
+    except:
+        pass
 
 
 def init_db():
@@ -95,8 +175,35 @@ init_db()
 def health_check():
     return jsonify({
         "status": "healthy",
-        "service": "pharmacy-service"
+        "service": "pharmacy-service",
+        "redis": "available" if redis_available else "unavailable"
     }), 200
+
+
+@app.route("/metrics", methods=["GET"])
+def metrics():
+    """Endpoint Prometheus pentru metrici."""
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+
+@app.before_request
+def before_request():
+    """Middleware pentru tracking metrici Prometheus."""
+    request.start_time = time.time()
+
+
+@app.after_request
+def after_request(response):
+    """Middleware pentru tracking metrici Prometheus după request."""
+    if hasattr(request, 'start_time'):
+        duration = time.time() - request.start_time
+        endpoint = request.endpoint or 'unknown'
+        method = request.method
+        
+        http_request_duration_seconds.labels(method=method, endpoint=endpoint).observe(duration)
+        http_requests_total.labels(method=method, endpoint=endpoint, status=response.status_code).inc()
+    
+    return response
 
 
 @app.route("/db-health", methods=["GET"])
@@ -125,15 +232,21 @@ def init_db_endpoint():
 @app.route("/pharmacies", methods=["GET"])
 def get_pharmacies():
     """Obține toate farmaciile."""
+    active_only = request.args.get("active_only", "false").lower() == "true"
+    cache_key = get_cache_key("pharmacies", "active" if active_only else "all")
+    
+    cached = get_from_cache(cache_key)
+    if cached:
+        return jsonify(cached), 200
+    
     session = SessionLocal()
     try:
-        active_only = request.args.get("active_only", "false").lower() == "true"
         query = session.query(Pharmacy)
         if active_only:
             query = query.filter(Pharmacy.is_active == True)
         
         pharmacies = query.all()
-        return jsonify([
+        result = [
             {
                 "id": p.id,
                 "name": p.name,
@@ -144,7 +257,10 @@ def get_pharmacies():
                 "created_at": p.created_at.isoformat() if p.created_at else None,
             }
             for p in pharmacies
-        ]), 200
+        ]
+        
+        set_cache(cache_key, result)
+        return jsonify(result), 200
     finally:
         session.close()
 
@@ -172,6 +288,9 @@ def create_pharmacy():
         session.add(pharmacy)
         session.commit()
         session.refresh(pharmacy)
+
+        # Invalidate pharmacies cache
+        invalidate_cache("pharmacies:*")
 
         return jsonify({
             "id": pharmacy.id,
@@ -239,19 +358,27 @@ def get_pharmacy_pharmacists(pharmacy_id: int):
 @app.route("/pharmacists", methods=["GET"])
 def get_pharmacists():
     """Obține toți farmaciștii."""
+    user_id = request.args.get("user_id", type=int)
+    pharmacy_id = request.args.get("pharmacy_id", type=int)
+    
+    cache_key = get_cache_key("pharmacists",
+                               user_id or "all",
+                               pharmacy_id or "all")
+    
+    cached = get_from_cache(cache_key)
+    if cached:
+        return jsonify(cached), 200
+    
     session = SessionLocal()
     try:
-        pharmacy_id = request.args.get("pharmacy_id", type=int)
-        user_id = request.args.get("user_id", type=int)
-
         query = session.query(Pharmacist)
-        if pharmacy_id:
-            query = query.filter(Pharmacist.pharmacy_id == pharmacy_id)
         if user_id:
             query = query.filter(Pharmacist.user_id == user_id)
+        if pharmacy_id:
+            query = query.filter(Pharmacist.pharmacy_id == pharmacy_id)
 
         pharmacists = query.all()
-        return jsonify([
+        result = [
             {
                 "id": p.id,
                 "pharmacy_id": p.pharmacy_id,
@@ -261,7 +388,10 @@ def get_pharmacists():
                 "created_at": p.created_at.isoformat() if p.created_at else None,
             }
             for p in pharmacists
-        ]), 200
+        ]
+        
+        set_cache(cache_key, result, ttl=180)
+        return jsonify(result), 200
     finally:
         session.close()
 
@@ -287,6 +417,9 @@ def create_pharmacist():
         session.add(pharmacist)
         session.commit()
         session.refresh(pharmacist)
+
+        # Invalidate pharmacists cache
+        invalidate_cache("pharmacists:*")
 
         return jsonify({
             "id": pharmacist.id,

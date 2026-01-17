@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <title>Profil Utilizator – MediHelp</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/keycloak-js@22.0.5/dist/keycloak.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .header {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      color: #2563eb;
+      font-size: 24px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+    .nav-links a {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .nav-links a:hover {
+      background: #eff6ff;
+    }
+    .auth-section {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      margin-bottom: 20px;
+    }
+    .profile-header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding-bottom: 30px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .avatar-container {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0 auto 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    .profile-header h2 {
+      margin: 0;
+      color: #111827;
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    .role-badge {
+      display: inline-block;
+      padding: 8px 20px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    .info-section {
+      background: #f9fafb;
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 25px;
+      border-left: 4px solid #667eea;
+    }
+    .info-section h3 {
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: #374151;
+      font-size: 18px;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 20px;
+      align-items: center;
+    }
+    .info-label {
+      color: #6b7280;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .info-value {
+      color: #111827;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    .permissions-section {
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      padding: 30px;
+      border-radius: 12px;
+      border-left: 4px solid #2563eb;
+    }
+    .permissions-section h3 {
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: #1e40af;
+      font-size: 18px;
+    }
+    .permissions-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .permissions-list li {
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(37, 99, 235, 0.2);
+      color: #1e3a8a;
+      font-size: 15px;
+    }
+    .permissions-list li:last-child {
+      border-bottom: none;
+    }
+    .permissions-list li:before {
+      content: "✓ ";
+      color: #10b981;
+      font-weight: bold;
+      margin-right: 8px;
+      font-size: 18px;
+    }
+    .action-buttons {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 2px solid #e5e7eb;
+    }
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #1d4ed8;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+    .btn-secondary {
+      background: #6b7280;
+      color: white;
+    }
+    .btn-secondary:hover {
+      background: #4b5563;
+    }
+    .hidden {
+      display: none;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #6b7280;
+    }
+    .error {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .alert {
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .alert-success {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+    .alert-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏥 MediHelp</h1>
+      <div style="display: flex; gap: 20px; align-items: center;">
+        <div class="nav-links">
+          <a href="index.html">🏠 Acasă</a>
+          <a href="profile.html">👤 Profil</a>
+        </div>
+        <div class="auth-section">
+          <span id="auth-status">Status: <strong style="color:red">neautentificat</strong></span>
+          <button id="btn-login" class="btn btn-primary">Login</button>
+          <button id="btn-logout" class="btn btn-secondary" disabled>Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="unauthenticated-view" class="card">
+      <div class="loading">
+        <h2>Bun venit la MediHelp</h2>
+        <p style="margin-top: 15px;">Te rugăm să te autentifici pentru a accesa profilul tău.</p>
+      </div>
+    </div>
+
+    <div id="authenticated-view" class="hidden">
+      <div class="card">
+        <div id="profile-content">
+          <div class="loading">
+            <p>Se încarcă profilul...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="profile.js"></script>
+</body>
+</html>

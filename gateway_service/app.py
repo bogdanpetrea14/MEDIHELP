@@ -4,6 +4,9 @@ import requests
 from flask_cors import CORS
 import jwt
 import time
+import redis
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from functools import wraps
 
 app = Flask(__name__)
 
@@ -39,6 +42,44 @@ KEYCLOAK_BASE_URL = os.environ.get(
 )
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "medihelp")
 KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "medihelp-frontend")
+
+# Redis configuration for rate limiting
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+REDIS_DB = int(os.environ.get("REDIS_DB", "0"))
+
+try:
+    redis_client = redis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        db=REDIS_DB,
+        decode_responses=True,
+        socket_connect_timeout=2
+    )
+    redis_client.ping()
+    redis_available = True
+except:
+    redis_available = False
+    app.logger.warning("Redis not available, rate limiting disabled")
+
+# Prometheus metrics
+http_requests_total = Counter(
+    'http_requests_total',
+    'Total HTTP requests',
+    ['method', 'endpoint', 'status']
+)
+
+http_request_duration_seconds = Histogram(
+    'http_request_duration_seconds',
+    'HTTP request duration in seconds',
+    ['method', 'endpoint']
+)
+
+rate_limit_hits = Counter(
+    'rate_limit_hits_total',
+    'Total rate limit hits',
+    ['endpoint']
+)
 
 
 def parse_token_no_verify(access_token: str):
@@ -76,10 +117,67 @@ def get_user_from_token():
         return None, None, None
 
     username = payload.get("preferred_username") or payload.get("sub")
+    
+    # Get roles from both realm_access and resource_access (client roles)
     realm_access = payload.get("realm_access", {})
-    roles = realm_access.get("roles", [])
+    realm_roles = realm_access.get("roles", [])
+    
+    # Also check client roles (resource_access)
+    resource_access = payload.get("resource_access", {})
+    client_roles = []
+    client_id = KEYCLOAK_CLIENT_ID
+    if client_id in resource_access:
+        client_roles = resource_access[client_id].get("roles", [])
+    
+    # Combine realm roles and client roles
+    roles = realm_roles + client_roles
     
     return payload, username, roles
+
+
+def rate_limit(max_requests=100, window_seconds=60, per_user=False):
+    """
+    Rate limiting decorator folosind Redis.
+    max_requests: numărul maxim de request-uri
+    window_seconds: perioada de timp în secunde
+    per_user: dacă True, limitează per utilizator (necesită autentificare)
+    """
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if not redis_available:
+                return f(*args, **kwargs)
+            
+            # Identifică cheia pentru rate limiting
+            if per_user:
+                payload, username, _ = get_user_from_token()
+                if not username:
+                    identifier = request.remote_addr
+                else:
+                    identifier = f"user:{username}"
+            else:
+                identifier = request.remote_addr
+            
+            key = f"ratelimit:{f.__name__}:{identifier}"
+            
+            # Verifică rate limit
+            current = redis_client.get(key)
+            if current and int(current) >= max_requests:
+                rate_limit_hits.labels(endpoint=f.__name__).inc()
+                return jsonify({
+                    "error": "rate limit exceeded",
+                    "message": f"Maximum {max_requests} requests per {window_seconds} seconds"
+                }), 429
+            
+            # Incrementează contorul
+            pipe = redis_client.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, window_seconds)
+            pipe.execute()
+            
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def require_role(allowed_roles):
@@ -104,8 +202,35 @@ def health_check():
     return jsonify({"status": "healthy", "service": "gateway-service"}), 200
 
 
+@app.route("/metrics", methods=["GET"])
+def metrics():
+    """Endpoint Prometheus pentru metrici."""
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+
+@app.before_request
+def before_request():
+    """Middleware pentru tracking metrici Prometheus."""
+    request.start_time = time.time()
+
+
+@app.after_request
+def after_request(response):
+    """Middleware pentru tracking metrici Prometheus după request."""
+    if hasattr(request, 'start_time'):
+        duration = time.time() - request.start_time
+        endpoint = request.endpoint or 'unknown'
+        method = request.method
+        
+        http_request_duration_seconds.labels(method=method, endpoint=endpoint).observe(duration)
+        http_requests_total.labels(method=method, endpoint=endpoint, status=response.status_code).inc()
+    
+    return response
+
+
 
 @app.route("/api/profiles", methods=["GET"])
+@rate_limit(max_requests=200, window_seconds=60)
 def api_get_profiles():
     try:
         resp = requests.get(f"{USER_PROFILE_BASE_URL}/profiles", timeout=3)
@@ -195,9 +320,25 @@ def api_user_me():
     if not username:
         return jsonify({"error": "username not found in token"}), 400
 
+    # Get roles from both realm_access and resource_access (client roles)
     realm_access = payload.get("realm_access", {})
-    roles = realm_access.get("roles", [])
+    realm_roles = realm_access.get("roles", [])
+    
+    # Also check client roles (resource_access)
+    resource_access = payload.get("resource_access", {})
+    client_roles = []
+    client_id = KEYCLOAK_CLIENT_ID
+    if client_id in resource_access:
+        client_roles = resource_access[client_id].get("roles", [])
+    
+    # Combine realm roles and client roles
+    roles = realm_roles + client_roles
     roles_str = ",".join(roles)
+    
+    # Log for debugging (both logger and print for visibility)
+    log_msg = f"User {username} - Realm roles: {realm_roles}, Client roles: {client_roles}, Combined: {roles}"
+    app.logger.info(log_msg)
+    print(log_msg, flush=True)  # Print to stdout for Docker logs
 
     headers = {
         "X-Username": username,
@@ -225,6 +366,7 @@ def api_user_me():
 
 # Prescription routes
 @app.route("/api/prescriptions", methods=["GET", "OPTIONS"])
+@rate_limit(max_requests=150, window_seconds=60, per_user=True)
 def api_get_prescriptions():
     if request.method == "OPTIONS":
         return "", 200
@@ -274,8 +416,25 @@ def api_fulfill_prescription(prescription_id: int):
         return jsonify({"error": "prescription-service unreachable", "details": str(e)}), 502
 
 
+@app.route("/api/prescriptions/<int:prescription_id>/cancel", methods=["POST", "OPTIONS"])
+def api_cancel_prescription(prescription_id: int):
+    if request.method == "OPTIONS":
+        return "", 200
+    
+    payload, username, roles = get_user_from_token()
+    if not username or "ADMIN" not in roles:
+        return jsonify({"error": "ADMIN role required"}), 403
+    
+    try:
+        resp = requests.post(f"{PRESCRIPTION_BASE_URL}/prescriptions/{prescription_id}/cancel", timeout=5)
+        return (resp.content, resp.status_code, resp.headers.items())
+    except Exception as e:
+        return jsonify({"error": "prescription-service unreachable", "details": str(e)}), 502
+
+
 # Inventory routes
 @app.route("/api/medications", methods=["GET", "OPTIONS"])
+@rate_limit(max_requests=300, window_seconds=60)  # Cache-ul face acest endpoint foarte rapid
 def api_get_medications():
     if request.method == "OPTIONS":
         return "", 200
@@ -305,6 +464,33 @@ def api_create_medication():
 def api_get_medication(medication_id: int):
     try:
         resp = requests.get(f"{INVENTORY_BASE_URL}/medications/{medication_id}", timeout=5)
+        return (resp.content, resp.status_code, resp.headers.items())
+    except Exception as e:
+        return jsonify({"error": "inventory-service unreachable", "details": str(e)}), 502
+
+
+@app.route("/api/medications/popular", methods=["GET", "OPTIONS"])
+def api_get_popular_medications():
+    """Obține medicamentele cele mai uzuale (optimizat cu cache)."""
+    if request.method == "OPTIONS":
+        return "", 200
+    
+    try:
+        limit = request.args.get("limit", type=int, default=10)
+        resp = requests.get(f"{INVENTORY_BASE_URL}/medications/popular", params={"limit": limit}, timeout=5)
+        return (resp.content, resp.status_code, resp.headers.items())
+    except Exception as e:
+        return jsonify({"error": "inventory-service unreachable", "details": str(e)}), 502
+
+
+@app.route("/api/medications/<int:medication_id>/stock", methods=["GET", "OPTIONS"])
+def api_get_medication_stock_all_pharmacies(medication_id: int):
+    """Obține stocul unui medicament în toate farmaciile (optimizat cu cache pentru medicamente uzuale)."""
+    if request.method == "OPTIONS":
+        return "", 200
+    
+    try:
+        resp = requests.get(f"{INVENTORY_BASE_URL}/medications/{medication_id}/stock", timeout=5)
         return (resp.content, resp.status_code, resp.headers.items())
     except Exception as e:
         return jsonify({"error": "inventory-service unreachable", "details": str(e)}), 502

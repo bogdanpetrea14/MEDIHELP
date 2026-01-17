@@ -28,11 +28,11 @@ scrape_configs:
       - targets: ['pharmacy-service:5000']
     metrics_path: '/metrics'
 
-  - job_name: 'postgres'
+  - job_name: 'postgres-exporter'
     static_configs:
-      - targets: ['postgres-db:5432']
+      - targets: ['postgres-exporter:9187']
 
-  - job_name: 'redis'
+  - job_name: 'redis-exporter'
     static_configs:
-      - targets: ['redis:6379']
+      - targets: ['medihelp_redis-exporter:9121']
 

@@ -3,3 +3,4 @@ sqlalchemy
 psycopg2-binary
 flask-cors
 redis
+prometheus-client

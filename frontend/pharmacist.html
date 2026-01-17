@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <title>MediHelp – Panou Farmacist</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/keycloak-js@22.0.5/dist/keycloak.min.js"></script>
+  <script src="common.js"></script>
+  <script src="app-functions.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f3f4f6;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .header {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      color: #2563eb;
+    }
+    .nav-links {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      margin-right: 20px;
+    }
+    .nav-links a {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .nav-links a:hover {
+      background: #eff6ff;
+    }
+    .auth-section {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      margin-bottom: 15px;
+      color: #111827;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      background: #e5e7eb;
+      color: #111827;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      background: #2563eb;
+      color: white;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-secondary { background: #e5e7eb; color: #111827; }
+    .btn-secondary:hover:not(:disabled) { background: #d1d5db; }
+    .btn-success { background: #10b981; color: white; }
+    .btn-success:hover:not(:disabled) { background: #059669; }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #374151;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    table th,
+    table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    table th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+    }
+    table tr:hover {
+      background: #f9fafb;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-danger { background: #fee2e2; color: #991b1b; }
+    .badge-info { background: #dbeafe; color: #1e40af; }
+    .alert {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .alert-info { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    .alert-warning { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏥 MediHelp – Panou Farmacist</h1>
+      <div style="display: flex; gap: 20px; align-items: center;">
+        <div class="nav-links">
+          <a href="index.html">🏠 Acasă</a>
+          <a href="profile.html" id="profile-link" style="display: none;">👤 Profil</a>
+        </div>
+        <div class="auth-section">
+          <span id="auth-status">Status: <strong style="color:red">neautentificat</strong></span>
+          <button id="btn-login" class="btn-primary">Login</button>
+          <button id="btn-logout" class="btn-secondary" disabled>Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="unauthenticated-view" class="card">
+      <h2>Bun venit la MediHelp</h2>
+      <p>Te rugăm să te autentifici pentru a accesa funcționalitățile sistemului.</p>
+    </div>
+
+    <div id="authenticated-view" class="hidden">
+      <div class="tabs">
+        <button class="tab active" data-tab="prescriptions">📋 Prescripții</button>
+        <button class="tab" data-tab="medications">💊 Medicamente</button>
+        <button class="tab" data-tab="pharmacies">🏪 Farmacii</button>
+        <button class="tab" data-tab="inventory">📦 Stocuri</button>
+      </div>
+
+      <!-- Prescriptions Tab -->
+      <div id="tab-prescriptions" class="tab-content active">
+        <div class="card">
+          <h2>Prescripții</h2>
+          <div id="prescription-alerts"></div>
+          <div class="form-group">
+            <button id="btn-refresh-prescriptions" class="btn-secondary">Reîncarcă</button>
+          </div>
+
+          <table id="prescriptions-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Pacient</th>
+                <th>Medicament</th>
+                <th>Doza</th>
+                <th>Cantitate</th>
+                <th>Status</th>
+                <th>Farmacie</th>
+                <th>Data</th>
+                <th>Acțiuni</th>
+              </tr>
+            </thead>
+            <tbody id="prescriptions-tbody">
+              <tr><td colspan="9">Se încarcă...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Medications Tab -->
+      <div id="tab-medications" class="tab-content">
+        <div class="card">
+          <h2>Medicamente</h2>
+          <div id="medication-alerts"></div>
+          <div class="form-group">
+            <button id="btn-refresh-medications" class="btn-secondary">Reîncarcă</button>
+          </div>
+
+          <table id="medications-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nume</th>
+                <th>Descriere</th>
+                <th>Preț</th>
+              </tr>
+            </thead>
+            <tbody id="medications-tbody">
+              <tr><td colspan="4">Se încarcă...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pharmacies Tab -->
+      <div id="tab-pharmacies" class="tab-content">
+        <div class="card">
+          <h2>Farmacii</h2>
+          <div id="pharmacy-alerts"></div>
+          <div class="form-group">
+            <button id="btn-refresh-pharmacies" class="btn-secondary">Reîncarcă</button>
+          </div>
+
+          <table id="pharmacies-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nume</th>
+                <th>Adresă</th>
+                <th>Telefon</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Acțiuni</th>
+              </tr>
+            </thead>
+            <tbody id="pharmacies-tbody">
+              <tr><td colspan="7">Se încarcă...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Inventory Tab -->
+      <div id="tab-inventory" class="tab-content">
+        <div class="card">
+          <h2>Gestionare Stocuri</h2>
+          <div id="inventory-alerts"></div>
+          <div class="form-group">
+            <label>Selectează Farmacie</label>
+            <select id="inventory-pharmacy-select">
+              <option value="">Selectează o farmacie...</option>
+            </select>
+            <button id="btn-refresh-inventory" class="btn-secondary" style="margin-top: 10px;">Reîncarcă Stoc</button>
+          </div>
+
+          <div id="add-stock-form" class="hidden" style="margin-top: 20px;">
+            <h3>Adaugă Stoc</h3>
+            <form id="stock-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Medicament</label>
+                  <select id="stock-medication-select" required></select>
+                </div>
+                <div class="form-group">
+                  <label>Cantitate</label>
+                  <input type="number" id="stock-quantity" min="1" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Prag Minim</label>
+                <input type="number" id="stock-threshold" min="0" value="10">
+              </div>
+              <button type="submit" class="btn-success">Adaugă Stoc</button>
+              <button type="button" class="btn-secondary" onclick="document.getElementById('add-stock-form').classList.add('hidden')">Anulează</button>
+            </form>
+          </div>
+
+          <div id="low-stock-alert" class="hidden"></div>
+
+          <table id="inventory-table">
+            <thead>
+              <tr>
+                <th>Medicament</th>
+                <th>Cantitate</th>
+                <th>Prag Minim</th>
+                <th>Status</th>
+                <th>Ultima Actualizare</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-tbody">
+              <tr><td colspan="5">Selectează o farmacie...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Prevent double execution
+    if (window.pharmacistPageInitialized) {
+      console.log('Pharmacist page: Already initialized, skipping...');
+    } else {
+      window.pharmacistPageInitialized = true;
+      
+      console.log('=== PHARMACIST PAGE SCRIPT STARTED ===');
+      console.log('Pharmacist page: keycloak available?', typeof keycloak !== 'undefined');
+      console.log('Pharmacist page: checkRoleAccess available?', typeof checkRoleAccess !== 'undefined');
+      
+      // Wait for DOM to be ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPharmacistPage);
+      } else {
+        initPharmacistPage();
+      }
+    
+    async function initPharmacistPage() {
+      console.log('Pharmacist page: DOM ready, starting initialization...');
+      
+      // Check role access - only PHARMACIST and ADMIN can access
+      try {
+        console.log('Pharmacist page: Starting authentication check...');
+        const profile = await checkRoleAccess(['PHARMACIST']);
+        console.log('Pharmacist page: checkRoleAccess returned:', profile);
+        
+        if (profile) {
+          console.log('Pharmacist page: Profile found, showing authenticated view');
+          // Hide unauthenticated view and show authenticated view
+          const unauthenticatedView = document.getElementById('unauthenticated-view');
+          const authenticatedView = document.getElementById('authenticated-view');
+          
+          console.log('Pharmacist page: unauthenticatedView:', unauthenticatedView);
+          console.log('Pharmacist page: authenticatedView:', authenticatedView);
+          
+          if (unauthenticatedView) {
+            unauthenticatedView.style.display = 'none';
+            console.log('Pharmacist page: Hidden unauthenticated view');
+          }
+          if (authenticatedView) {
+            authenticatedView.classList.remove('hidden');
+            authenticatedView.style.display = 'block';
+            console.log('Pharmacist page: Shown authenticated view');
+          }
+          
+          // Initialize tab switching
+          initializeTabSwitching();
+        
+        // Load initial data
+        loadPrescriptions();
+        loadMedications();
+        loadPharmacies();
+        loadPharmaciesForSelect();
+        
+        // Setup handlers
+        document.getElementById('btn-refresh-prescriptions').onclick = loadPrescriptions;
+        document.getElementById('btn-refresh-medications').onclick = loadMedications;
+        document.getElementById('btn-refresh-pharmacies').onclick = loadPharmacies;
+        document.getElementById('btn-refresh-inventory').onclick = loadInventory;
+        
+        // Load medications for inventory select
+        loadMedications();
+        
+        // Inventory pharmacy select change
+        document.getElementById('inventory-pharmacy-select').onchange = async () => {
+          const pharmacyId = document.getElementById('inventory-pharmacy-select').value;
+          if (pharmacyId) {
+            loadInventory();
+            document.getElementById('add-stock-form').classList.remove('hidden');
+          } else {
+            document.getElementById('inventory-tbody').innerHTML = '<tr><td colspan="5">Selectează o farmacie...</td></tr>';
+            document.getElementById('add-stock-form').classList.add('hidden');
+          }
+        };
+        
+        // Stock form handler
+        document.getElementById('stock-form').onsubmit = async (e) => {
+          e.preventDefault();
+          try {
+            const pharmacyId = document.getElementById('inventory-pharmacy-select').value;
+            if (!pharmacyId) {
+              alert('Selectează o farmacie!');
+              return;
+            }
+            
+            // Verify pharmacist belongs to this pharmacy
+            try {
+              const pharmacists = await apiCall(`/pharmacists?user_id=${currentUserProfile.id}`);
+              const belongsToPharmacy = pharmacists.some(p => p.pharmacy_id == pharmacyId);
+              if (!belongsToPharmacy) {
+                alert('Nu aparții acestei farmacii! Poți gestiona doar stocul farmaciei tale.');
+                return;
+              }
+            } catch (e) {
+              console.error('Error checking pharmacist pharmacy:', e);
+            }
+            
+            await apiCall(`/pharmacies/${pharmacyId}/stock`, {
+              method: 'POST',
+              body: JSON.stringify({
+                medication_id: parseInt(document.getElementById('stock-medication-select').value),
+                quantity: parseInt(document.getElementById('stock-quantity').value),
+                min_threshold: parseInt(document.getElementById('stock-threshold').value),
+              })
+            });
+            
+            showAlert('inventory-alerts', 'Stoc adăugat cu succes!', 'success');
+            document.getElementById('stock-form').reset();
+            loadInventory();
+          } catch (err) {
+            showAlert('inventory-alerts', 'Eroare: ' + err.message, 'error');
+          }
+        };
+        } else {
+          console.log('Pharmacist page: No profile returned, showing unauthenticated view');
+          // Not authenticated or wrong role - show unauthenticated view
+          const unauthenticatedView = document.getElementById('unauthenticated-view');
+          const authenticatedView = document.getElementById('authenticated-view');
+          if (unauthenticatedView) unauthenticatedView.style.display = 'block';
+          if (authenticatedView) {
+            authenticatedView.classList.add('hidden');
+            authenticatedView.style.display = 'none';
+          }
+        }
+      } catch (err) {
+        console.error('Error in pharmacist page initialization:', err);
+        console.error('Error stack:', err.stack);
+        // Show unauthenticated view on error
+        const unauthenticatedView = document.getElementById('unauthenticated-view');
+        const authenticatedView = document.getElementById('authenticated-view');
+        if (unauthenticatedView) {
+          unauthenticatedView.style.display = 'block';
+          // Show error message
+          unauthenticatedView.innerHTML = `
+            <h2>Bun venit la MediHelp</h2>
+            <p style="color: #991b1b;">Eroare: ${err.message}</p>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 10px;">Verifică consola pentru detalii.</p>
+            <button onclick="window.location.reload()" style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px;">
+              Reîncarcă Pagina
+            </button>
+          `;
+        }
+        if (authenticatedView) {
+          authenticatedView.classList.add('hidden');
+          authenticatedView.style.display = 'none';
+        }
+      }
+    }
+    }
+  </script>
+</body>
+</html>

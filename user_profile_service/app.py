@@ -9,9 +9,24 @@ from sqlalchemy import (
     String,
 )
 from sqlalchemy.orm import sessionmaker, declarative_base
+import time
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 app = Flask(__name__)
 CORS(app)
+
+# Prometheus metrics
+http_requests_total = Counter(
+    'http_requests_total',
+    'Total HTTP requests',
+    ['method', 'endpoint', 'status']
+)
+
+http_request_duration_seconds = Histogram(
+    'http_request_duration_seconds',
+    'HTTP request duration in seconds',
+    ['method', 'endpoint']
+)
 
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
@@ -23,7 +38,7 @@ DATABASE_URL = (
     f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
-engine = create_engine(DATABASE_URL, echo=False, future=True)
+engine = create_engine(DATABASE_URL, echo=False, future=True, pool_pre_ping=True, pool_recycle=3600)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -53,6 +68,32 @@ def health_check():
         "status": "healthy",
         "service": "user-profile-service"
     }), 200
+
+
+@app.route("/metrics", methods=["GET"])
+def metrics():
+    """Endpoint Prometheus pentru metrici."""
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+
+@app.before_request
+def before_request():
+    """Middleware pentru tracking metrici Prometheus."""
+    request.start_time = time.time()
+
+
+@app.after_request
+def after_request(response):
+    """Middleware pentru tracking metrici Prometheus după request."""
+    if hasattr(request, 'start_time'):
+        duration = time.time() - request.start_time
+        endpoint = request.endpoint or 'unknown'
+        method = request.method
+        
+        http_request_duration_seconds.labels(method=method, endpoint=endpoint).observe(duration)
+        http_requests_total.labels(method=method, endpoint=endpoint, status=response.status_code).inc()
+    
+    return response
 
 
 @app.route("/db-health", methods=["GET"])
@@ -135,8 +176,39 @@ def me():
     if not username:
         return jsonify({"error": "X-Username header required"}), 400
 
-    roles = [r for r in roles_str.split(",") if r]
-    main_role = roles[0] if roles else "USER"
+    roles = [r.strip() for r in roles_str.split(",") if r.strip()]
+    
+    # Log received roles for debugging (both logger and print for visibility)
+    log_msg = f"User {username} - Received roles: {roles}"
+    app.logger.info(log_msg)
+    print(log_msg, flush=True)  # Print to stdout for Docker logs
+    
+    # Filter out default Keycloak roles
+    excluded_roles = {"default-roles-medihelp", "offline_access", "uma_authorization"}
+    app_roles = [r for r in roles if r not in excluded_roles]
+    
+    log_msg2 = f"User {username} - Filtered app roles: {app_roles}"
+    app.logger.info(log_msg2)
+    print(log_msg2, flush=True)  # Print to stdout for Docker logs
+    
+    # Priority order for roles (highest to lowest)
+    role_priority = ["ADMIN", "DOCTOR", "PHARMACIST", "PATIENT"]
+    
+    # Find the highest priority role - check in ALL roles first
+    main_role = None
+    for priority_role in role_priority:
+        if priority_role in roles:  # Check in all roles, not just app_roles
+            main_role = priority_role
+            app.logger.info(f"User {username} - Found priority role: {main_role}")
+            break
+    
+    # If no priority role found, use the first app role (after filtering)
+    if main_role is None and app_roles:
+        main_role = app_roles[0]
+        app.logger.info(f"User {username} - Using first app role: {main_role}")
+    elif main_role is None:
+        main_role = "USER"
+        app.logger.warning(f"User {username} - No valid role found, defaulting to USER. All roles: {roles}")
 
     session = SessionLocal()
     try:
@@ -146,6 +218,22 @@ def me():
             session.add(user)
             session.commit()
             session.refresh(user)
+        else:
+            # Always update role if:
+            # 1. Current role is excluded (like "default-roles-medihelp")
+            # 2. Current role is not in the priority list (invalid role)
+            # 3. We found a valid role and it's different from current
+            current_role_excluded = user.role in excluded_roles
+            current_role_invalid = user.role not in role_priority
+            has_valid_role = main_role in role_priority
+            should_update = current_role_excluded or current_role_invalid or (has_valid_role and user.role != main_role)
+            
+            if should_update:
+                old_role = user.role
+                user.role = main_role
+                session.commit()
+                session.refresh(user)
+                app.logger.info(f"Updated user {username} role from {old_role} to {main_role} (roles from token: {roles})")
 
         return jsonify(
             {"id": user.id, "username": user.username, "role": user.role}
